@@ -1,10 +1,10 @@
 # edgeIA
 
-Projeto de monitoramento ambiental com TinyML na borda, backend em PHP e persistencia em MySQL. O objetivo do sistema e ler temperatura/umidade em um ESP8266, executar uma inferencia local para classificar a leitura como `NORMAL` ou `ALERTA`, enviar os dados ao servidor e exibi-los em um dashboard web.
+Projeto de monitoramento ambiental com TinyML na borda, backend em PHP, persistencia em MySQL e uma interface em Streamlit para simulacao tática. O objetivo do sistema e ler temperatura/umidade em um ESP8266, executar uma inferencia local para classificar a leitura como `NORMAL` ou `ALERTA`, enviar os dados ao servidor, exibi-los em um dashboard web e apoiar a tomada de decisao com rotas de combate e fuga para um provavel incendio.
 
 ## Visao Geral
 
-O repositorio contem dois blocos principais:
+O repositorio contem tres blocos principais:
 
 1. Aplicacao web na raiz do projeto:
    - recebe dados do dispositivo via HTTP;
@@ -12,7 +12,13 @@ O repositorio contem dois blocos principais:
    - salva leituras no MySQL;
    - mostra as ultimas inferencias e o nivel de bateria em uma pagina PHP.
 
-2. Projeto embarcado e pipeline de IA em `Produto/`:
+2. Aplicacao analitica em Python/Streamlit na raiz:
+   - renderiza um mapa interativo com `folium`;
+   - modela uma rede em malha com `networkx`;
+   - permite selecionar focos de incendio;
+   - calcula rotas de fuga para civis e rotas de incursao para bombeiros com Dijkstra.
+
+3. Projeto embarcado e pipeline de IA em `Produto/`:
    - gera dados sinteticos e/ou usa CSVs reais;
    - treina uma rede neural pequena em Python/TensorFlow;
    - converte o modelo para TensorFlow Lite e depois para `model_data.h`;
@@ -41,6 +47,9 @@ MySQL
         |
         v
 Dashboard index.php
+        
+Camada de apoio tatico
+  - app.py (Streamlit + Folium + Dijkstra)
 ```
 
 ## Estrutura Do Repositorio
@@ -49,10 +58,12 @@ Dashboard index.php
 edgeIA/
 |-- api.php
 |-- api_receptor.php
+|-- app.py
 |-- bd.sql
 |-- conexao.php
 |-- index.php
 |-- main.cpp
+|-- requirements.txt
 |-- udp_broker.php
 `-- Produto/
     |-- platformio.ini
@@ -147,6 +158,52 @@ Cria o banco `monitoramento_iot` e a tabela `leituras_tinyml` com:
 - `classe_detectada`
 - `acuracia`
 - `timestamp`
+
+## Aplicacao Tatica Em Streamlit
+
+### `app.py`
+
+O arquivo `app.py` adiciona uma camada de simulacao e apoio operacional ao projeto. Em vez de apenas mostrar leituras, ele representa uma malha de nos ESP32 sobre uma area florestal e calcula rotas com base em focos de incendio informados pelo usuario.
+
+O aplicativo usa:
+
+- `streamlit` para a interface;
+- `folium` para o mapa;
+- `streamlit_folium` para embutir o mapa no dashboard;
+- `networkx` para modelar o grafo e executar o algoritmo de Dijkstra.
+
+### Como a simulacao funciona
+
+O codigo define:
+
+- 10 nos com coordenadas geograficas aproximadas;
+- um grafo nao direcionado com conexoes entre os nos;
+- pesos padrao `1` para arestas seguras;
+- penalizacao de peso `999` em arestas ligadas a nos em chamas.
+
+Com isso, o aplicativo calcula a menor rota viavel em dois modos:
+
+1. `Rota de Evasao (Civis)`
+   - o usuario informa onde os civis estao;
+   - o destino e automaticamente o no `0`, tratado como gateway e ponto de fuga;
+   - nos afetados pelo incendio passam a ser evitados.
+
+2. `Rota de Incursao (Bombeiros)`
+   - a origem e automaticamente o no `0`;
+   - o destino principal passa a ser o primeiro foco de incendio selecionado;
+   - o algoritmo evita demais areas criticas, mas permite chegar ao foco principal do combate.
+
+### Saidas visuais do mapa
+
+O mapa renderizado em `folium` mostra:
+
+- arestas verdes para caminhos normais;
+- arestas vermelhas tracejadas para regioes impactadas pelo incendio;
+- rota azul para evasao de civis;
+- rota laranja escura para incursao dos bombeiros;
+- marcadores coloridos para origem, destino, gateway e focos de incendio.
+
+Se nao houver rota segura, a interface informa que a area esta isolada ou que nao existe caminho fisico disponivel.
 
 ## Firmware Embarcado
 
@@ -268,6 +325,15 @@ Serve como apoio para montar datasets reais a partir do hardware.
 5. O PHP grava a leitura no MySQL.
 6. `index.php` consulta a base e renderiza o dashboard.
 
+### Fluxo de apoio a decisao
+
+1. O operador abre `app.py` via Streamlit.
+2. Seleciona um ou mais focos de incendio.
+3. Escolhe entre missao de evasao de civis ou incursao de bombeiros.
+4. O grafo recebe pesos proibitivos nas areas em risco.
+5. O algoritmo de Dijkstra calcula a melhor rota disponivel.
+6. O mapa exibe visualmente o trajeto recomendado para fuga ou combate.
+
 ### Fluxo de treinamento e deploy do modelo
 
 1. Gerar dados com `gerar_dados.py` ou usar `normal.csv` e `alerta.csv`.
@@ -293,7 +359,18 @@ Arquivos principais:
 - dashboard: `http://localhost/edgeIA/index.php`
 - endpoint HTTP: `http://localhost/edgeIA/api_receptor.php`
 
-### 3. Firmware
+### 3. Interface Streamlit
+
+Instale as dependencias Python e inicie o aplicativo:
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+A interface abre no navegador local do Streamlit e permite simular os caminhos de combate e de fuga em funcao dos focos de incendio selecionados.
+
+### 4. Firmware
 
 No `Produto/src/main.cpp`, ajuste:
 
@@ -303,7 +380,7 @@ No `Produto/src/main.cpp`, ajuste:
 
 Depois compile e envie com PlatformIO dentro de `Produto/`.
 
-### 4. Treinamento do modelo
+### 5. Treinamento do modelo
 
 Exemplo de sequencia:
 
@@ -320,6 +397,7 @@ Depois confirme se `model_data.h` e os valores de media/desvio foram refletidos 
 
 - `bd.sql` nao cria a coluna `tipo_leitura`, mas `index.php` e `api_receptor.php` dependem dela. Para o dashboard atual funcionar corretamente, a tabela precisa dessa coluna.
 - O campo `acuracia` hoje esta sobrecarregado: guarda temperatura em leituras de IA e voltagem em leituras de bateria.
+- `app.py` hoje funciona como simulador tatico independente: ele nao consulta diretamente o banco nem consome automaticamente as leituras do ESP8266.
 - Existem duas rotas de ingestao HTTP (`api.php` e `api_receptor.php`) e uma rota UDP (`udp_broker.php`). O fluxo ativo no firmware principal aponta para `api_receptor.php`.
 - Existem arquivos de ambiente virtual dentro de `Produto/venv` e `Produto/venv_tcc`. Eles sao dependencias locais e nao fazem parte da logica principal do sistema.
 - O firmware contem configuracoes locais de rede e servidor hardcoded. Em um ambiente mais robusto, isso poderia ser externalizado.
@@ -330,6 +408,7 @@ Se este projeto continuar evoluindo, os proximos ajustes naturais seriam:
 
 - alinhar o schema do banco com o uso atual da aplicacao;
 - separar semanticamente temperatura, confianca e voltagem em colunas distintas;
+- integrar `app.py` com as leituras reais do backend para acionar rotas a partir de alertas detectados;
 - consolidar os endpoints em uma unica API;
 - remover arquivos duplicados ou antigos da raiz para deixar o fluxo principal mais claro;
 - adicionar um README especifico em `Produto/` se a parte embarcada crescer.
