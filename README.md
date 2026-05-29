@@ -64,7 +64,7 @@ edgeIA/
     |   `-- model_data_antigo.h
     |-- gerar_dados.py
     |-- treinar_ia.py
-    |-- teinar_ia2.py
+    |-- treinar_ia2.py
     |-- converter_tflite.py
     |-- dataset.py
     |-- normal.csv
@@ -225,9 +225,9 @@ Etapas do script:
 6. salva em `modelo_ambiental.h5`;
 7. imprime medias e desvios para serem copiados ao firmware.
 
-### `Produto/teinar_ia2.py`
+### `Produto/treinar_ia2.py`
 
-Script muito parecido com o anterior, mas usando `dados_treinamento.csv` gerado de forma sintetica. O nome do arquivo sugere um typo em `teinar`.
+Script muito parecido com o anterior, mas usando `dados_treinamento.csv` gerado de forma sintetica. O nome do arquivo sugere um typo em `treinar`.
 
 Esse script:
 
@@ -271,7 +271,7 @@ Serve como apoio para montar datasets reais a partir do hardware.
 ### Fluxo de treinamento e deploy do modelo
 
 1. Gerar dados com `gerar_dados.py` ou usar `normal.csv` e `alerta.csv`.
-2. Treinar com `treinar_ia.py` ou `teinar_ia2.py`.
+2. Treinar com `treinar_ia.py` ou `treinar_ia2.py`.
 3. Salvar `modelo_ambiental.h5`.
 4. Converter com `converter_tflite.py`.
 5. Copiar/usar `model_data.h` no firmware.
@@ -310,7 +310,7 @@ Exemplo de sequencia:
 ```bash
 cd Produto
 python3 gerar_dados.py
-python3 teinar_ia2.py
+python3 treinar_ia2.py
 python3 converter_tflite.py
 ```
 
